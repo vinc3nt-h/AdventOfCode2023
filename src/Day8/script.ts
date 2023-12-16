@@ -77,6 +77,18 @@ const findUntilZ = async (
   });
 };
 
+const gcd = (a: number, b: number): number => {
+  if (!b) {
+    return a;
+  }
+
+  return gcd(b, a % b);
+} 
+
+const lcm = (a: number, b: number): number => {
+  return (a*b)/gcd(a,b)
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                    MAIN                                    */
 /* -------------------------------------------------------------------------- */
@@ -97,65 +109,59 @@ const findPathToZZZ = (map: Map): number => {
   return steps;
 };
 
-const findAllPathToZZZLoop = (map: Map):number => {
-    let endNodes = Object.keys(map.nodes).filter((key) => key.match(/[A-Z0-9][A-Z0-9]A/g))
-    let indexInstruction = 0
-    let steps = 0
-    const start = Date.now()
+// const findAllPathToZZZLoop = (map: Map):number => {
+//     let endNodes = Object.keys(map.nodes).filter((key) => key.match(/[A-Z0-9][A-Z0-9]A/g))
+//     let indexInstruction = 0
+//     let steps = 0
+//     const start = Date.now()
 
-    while(steps < 5000000000 && !endNodes.every((key) => key.match(/[A-Z0-9][A-Z0-9]Z/g))){
-        if(indexInstruction >= map.instruction.length){
-            indexInstruction = 0
-        }
-        const newEndNodes = []
-        const instruction = map.instruction[indexInstruction]
-        for (let i = 0; i < endNodes.length; i++) {
+//     while(steps < 5000000000 && !endNodes.every((key) => key.match(/[A-Z0-9][A-Z0-9]Z/g))){
+//         if(indexInstruction >= map.instruction.length){
+//             indexInstruction = 0
+//         }
+//         const newEndNodes = []
+//         const instruction = map.instruction[indexInstruction]
+//         for (let i = 0; i < endNodes.length; i++) {
 
-            newEndNodes.push(map.nodes[endNodes[i]][instruction])
-        }
-        endNodes = newEndNodes
-        indexInstruction++
-        steps++
-    }
-    const end = Date.now()
-    console.log( end - start);
-    console.log(endNodes)
-    return steps
-}
+//             newEndNodes.push(map.nodes[endNodes[i]][instruction])
+//         }
+//         endNodes = newEndNodes
+//         indexInstruction++
+//         steps++
+//     }
+//     const end = Date.now()
+//     console.log( end - start);
+//     console.log(endNodes)
+//     return steps
+// }
 
 const findAllPathToZZZOptimize = async (map: Map) => {
-  let endNodes = Object.keys(map.nodes).filter((key) =>
+  let startNodes = Object.keys(map.nodes).filter((key) =>
     key.match(/[A-Z0-9][A-Z0-9]A/g)
   );
-  let steps = 0;
-  const start = Date.now();
-  let allSame = false;
-  let results: Result[] = endNodes.map((endNode) => {
-    return { step: 0, indexInstruction: 0, node: endNode };
-  });
-  console.log("start", results);
 
-  let loop = 0;
-  while (!allSame && loop < 100) {
-    const newResults = await Promise.all(
-      results.map((result) =>
-        findUntilZ(map, result.node, result.step, result.indexInstruction)
-      )
-    );
-    console.log("newResults", newResults);
-    
-    allSame = newResults
-      .map((result) => result.step)
-      .every((step) => step === results[0].step);
-    results = newResults
-    loop++;
+  let starts: Result[] = startNodes.map((startNode) => {
+    return { step: 0, indexInstruction: 0, node: startNode };
+  });
+
+  const results = await Promise.all(
+    starts.map((start) =>
+      findUntilZ(map, start.node, start.step, start.indexInstruction)
+    )
+  );
+
+  let leastCommon = 0
+  for (let i = 1; i < results.length; i++) {
+    if(leastCommon != 0){
+      leastCommon = lcm(leastCommon, results[i].step)
+    }else{
+      leastCommon = lcm(results[i-1].step, results[i].step)
+    }
   }
 
-  console.log("FINAL", results);
 
-  const end = Date.now();
-  console.log("TIME", end - start);
-  return steps;
+
+  console.log(leastCommon);
 };
 
 /* -------------------------------------------------------------------------- */
@@ -169,8 +175,8 @@ const puzzle1 = (lines: string[]): number => {
 
 const puzzle2 = (lines: string[]) => {
   const map = buildMap(lines);
-  console.log(findAllPathToZZZLoop(map));
+  findAllPathToZZZOptimize(map);
 };
 
-// console.log("Puzzle 1:", puzzle1(buildLines()));
-puzzle2(buildLines());
+console.log("Puzzle 1:", puzzle1(buildLines()));
+console.log("Puzzle 2:", puzzle2(buildLines()));
