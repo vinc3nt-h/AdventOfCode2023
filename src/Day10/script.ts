@@ -16,13 +16,13 @@ type Pipe = {
 };
 
 const PIPES_MAP = {
-  "|": { y: [-1, 1], x: [0] },
-  "-": { y: [0], x: [-1, 1] },
-  L: { y: [-1], x: [1] },
-  J: { y: [-1], x: [-1] },
-  "7": { y: [1], x: [-1] },
-  F: { y: [1], x: [1] },
-  S: { y: [-1, 1], x: [-1, 1] },
+  "|": { y: [-1, 1], x: [0], xCross: 0, yCross: 1 },
+  "-": { y: [0], x: [-1, 1], xCross: 1, yCross: 0, endX: true },
+  L: { y: [-1], x: [1], xCross: 0.5, yCross: 0.5, endX: true },
+  J: { y: [-1], x: [-1], xCross: -0.5, yCross: -0.5, endX: true },
+  "7": { y: [1], x: [-1], xCross: 0.5, yCross: 0.5 },
+  F: { y: [1], x: [1], xCross: -0.5, yCross: -0.5 },
+  S: { y: [-1, 1], x: [-1, 1], xCross: 0, yCross: 0 },
 };
 
 const findStart = (map: string[]): Coord => {
@@ -41,7 +41,7 @@ const findNextAfterStart = (
 ): Coord => {
   for (const coord of coords) {
     const pipeKey = map[coord.y][coord.x];
-    if (pipeKey) {
+    if (pipeKey && pipeKey != ".") {
       const nextCoords = findNextCoords(
         entry,
         { key: pipeKey, coord: { x: coord.x, y: coord.y } },
@@ -56,6 +56,8 @@ const findNextAfterStart = (
     }
   }
 };
+
+let miss = 0;
 
 const findNextCoords = (
   entry: Coord,
@@ -89,7 +91,7 @@ const findNextCoords = (
 const findPath = (map: string[], start: Pipe) => {
   let end: Pipe = start;
   let previousCoord: Coord;
-  const path: string[] = [];
+  const path: Pipe[] = [];
   while (
     end?.coord?.x !== start.coord.x ||
     end?.coord?.y !== start.coord.y ||
@@ -106,9 +108,112 @@ const findPath = (map: string[], start: Pipe) => {
       key = map[nextCoords[0].y][nextCoords[0].x];
       end = { coord: nextCoords[0], key };
     }
-    path.push(key);
+    path.push(end);
   }
   return path;
+};
+
+const rayCastingVertical = (coordinates: Coord, path: Pipe[]) => {
+  const pipeVerticalBefore = path
+    .filter(
+      (item) => item.coord.x === coordinates.x && item.coord.y < coordinates.y
+    )
+    .sort((a, b) => (a.coord.y < b.coord.y ? -1 : 1));
+  const groupPipeNext: Pipe[][] = [];
+  let groupIndex = 0;
+  for (const pipe of pipeVerticalBefore) {
+    if (groupPipeNext.length === 0) {
+      groupPipeNext.push([pipe]);
+    } else {
+      const previous =
+        groupPipeNext[groupIndex][groupPipeNext[groupIndex].length - 1];
+      if (
+        previous.coord.y === pipe.coord.y - 1 &&
+        !PIPES_MAP[previous.key].endX
+      ) {
+        groupPipeNext[groupIndex].push(pipe);
+      } else {
+        groupIndex++;
+        groupPipeNext.push([pipe]);
+      }
+    }
+  }
+  let nbPipeCrossed = 0;
+
+  for (const pipes of groupPipeNext) {
+    const valueGroup = pipes.reduce(
+      (acc, current) => PIPES_MAP[current.key].xCross + acc,
+      0
+    );
+    if (valueGroup == 1 || valueGroup == -1) {
+      nbPipeCrossed++;
+    }
+  }
+  // console.log(groupPipeNext, nbPipeCrossed, coordinates);
+
+  return nbPipeCrossed % 2 == 1;
+};
+
+const rayCastingHorizontal = (coordinates: Coord, path: Pipe[]) => {
+  const pipeHorizontalBefore = path
+    .filter(
+      (item) => item.coord.y === coordinates.y && item.coord.x < coordinates.x
+    )
+    .sort((a, b) => (a.coord.x < b.coord.x ? -1 : 1));
+  const groupPipeNext: Pipe[][] = [];
+  let groupIndex = 0;
+  for (const pipe of pipeHorizontalBefore) {
+    if (groupPipeNext.length === 0) {
+      groupPipeNext.push([pipe]);
+    } else {
+      if (
+        groupPipeNext[groupIndex][groupPipeNext[groupIndex].length - 1].coord
+          .x ===
+        pipe.coord.x - 1
+      ) {
+        groupPipeNext[groupIndex].push(pipe);
+      } else {
+        groupIndex++;
+        groupPipeNext.push([pipe]);
+      }
+    }
+  }
+  let nbPipeCrossed = 0;
+
+  for (const pipes of groupPipeNext) {
+    const valueGroup = pipes.reduce(
+      (acc, current) => PIPES_MAP[current.key].yCross + acc,
+      0
+    );
+    if (valueGroup == 1 || valueGroup == -1) {
+      nbPipeCrossed++;
+    }
+  }
+  return nbPipeCrossed % 2 == 1;
+};
+
+const findTiles = (path: Pipe[], lines: string[]) => {
+  const coordinatesPath = path.map((item) => item.coord);
+  let tiles = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    for (let j = 0; j < line.length; j++) {
+      const coordinates = { x: j, y: i };
+      if (
+        !coordinatesPath.find(
+          (item) => item.x == coordinates.x && item.y == coordinates.y
+        )
+      ) {
+        const isInside = rayCastingVertical(coordinates, path);
+        if (isInside) {
+          tiles++;
+        } else {
+          miss++;
+        }
+      }
+    }
+  }
+  return tiles;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -122,7 +227,15 @@ const puzzle1 = (lines: string[]) => {
   return path.length / 2;
 };
 
-const puzzle2 = (lines: string[]) => {};
+const puzzle2 = (lines: string[]) => {
+  console.log(lines.length, lines[0].length);
+
+  const start = findStart(lines);
+  const path = findPath(lines, { key: "S", coord: start });
+  const tiles = findTiles(path, lines);
+  return tiles;
+};
 
 console.log("Puzzle 1:", puzzle1(buildLines()));
 console.log("Puzzle 2:", puzzle2(buildLines()));
+console.log(miss);
